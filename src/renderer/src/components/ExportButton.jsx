@@ -2,7 +2,7 @@ import React from "react";
 import { useTheme } from "../ThemeContext.jsx";
 
 function toCsv(records) {
-  const cols = ["date", "symbol", "name", "SCTR", "delta", "close", "marketCap", "vol", "industry", "sector"];
+  const cols = ["date", "symbol", "name", "SCTR", "industryRS", "sectorRS", "delta", "close", "marketCap", "vol", "industry", "sector"];
   const escape = (v) => {
     const s = v == null ? "" : String(v);
     if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;

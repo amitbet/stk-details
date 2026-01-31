@@ -127,26 +127,133 @@ async function parseCsvForTickers(csvText) {
   };
 }
 
+function calculateIndustrySectorStats(allRecords) {
+  // Calculate averages and stats for each industry and sector
+  const industryStats = {};
+  const sectorStats = {};
+
+  for (const record of allRecords) {
+    const sctr = typeof record.SCTR === "number" ? record.SCTR : null;
+    if (sctr === null) continue;
+
+    const industry = String(record.industry || "").trim();
+    const sector = String(record.sector || "").trim();
+
+    if (industry) {
+      if (!industryStats[industry]) {
+        industryStats[industry] = { sum: 0, count: 0, values: [] };
+      }
+      industryStats[industry].sum += sctr;
+      industryStats[industry].count++;
+      industryStats[industry].values.push(sctr);
+    }
+
+    if (sector) {
+      if (!sectorStats[sector]) {
+        sectorStats[sector] = { sum: 0, count: 0, values: [] };
+      }
+      sectorStats[sector].sum += sctr;
+      sectorStats[sector].count++;
+      sectorStats[sector].values.push(sctr);
+    }
+  }
+
+  // Calculate averages and percentiles
+  const result = { industries: {}, sectors: {} };
+
+  for (const [industry, stats] of Object.entries(industryStats)) {
+    if (stats.count > 0) {
+      const avg = stats.sum / stats.count;
+      const sorted = [...stats.values].sort((a, b) => a - b);
+      result.industries[industry] = {
+        avg,
+        count: stats.count,
+        min: sorted[0],
+        max: sorted[sorted.length - 1],
+        median: sorted[Math.floor(sorted.length / 2)]
+      };
+    }
+  }
+
+  for (const [sector, stats] of Object.entries(sectorStats)) {
+    if (stats.count > 0) {
+      const avg = stats.sum / stats.count;
+      const sorted = [...stats.values].sort((a, b) => a - b);
+      result.sectors[sector] = {
+        avg,
+        count: stats.count,
+        min: sorted[0],
+        max: sorted[sorted.length - 1],
+        median: sorted[Math.floor(sorted.length / 2)]
+      };
+    }
+  }
+
+  return result;
+}
+
+function calculateRelativeStrength(record, stats) {
+  const sctr = typeof record.SCTR === "number" ? record.SCTR : null;
+  if (sctr === null) return { industryRS: null, sectorRS: null };
+
+  const industry = String(record.industry || "").trim();
+  const sector = String(record.sector || "").trim();
+
+  let industryRS = null;
+  let sectorRS = null;
+
+  if (industry && stats.industries[industry]) {
+    const indStats = stats.industries[industry];
+    if (indStats.avg > 0) {
+      // Relative strength as percentage above/below average
+      industryRS = ((sctr - indStats.avg) / indStats.avg) * 100;
+    }
+  }
+
+  if (sector && stats.sectors[sector]) {
+    const secStats = stats.sectors[sector];
+    if (secStats.avg > 0) {
+      sectorRS = ((sctr - secStats.avg) / secStats.avg) * 100;
+    }
+  }
+
+  return { industryRS, sectorRS };
+}
+
 async function fetchSctrForTickers(tickers) {
   const normalized = tickers
     .map((t) => String(t || "").trim().toUpperCase())
     .filter(Boolean);
 
-  if (normalized.length === 0) return { records: [] };
+  if (normalized.length === 0) return { records: [], stats: { industries: {}, sectors: {} } };
 
+  // Fetch ALL records to calculate industry/sector statistics
   const all = await fetchSctrJson({});
   const wanted = new Set(normalized);
   const records = all.filter((r) => wanted.has(String(r.symbol || "").toUpperCase()));
 
+  // Calculate industry/sector statistics from all records
+  const stats = calculateIndustrySectorStats(all);
+
+  // Add relative strength to each record
+  const recordsWithRS = records.map((record) => {
+    const rs = calculateRelativeStrength(record, stats);
+    return {
+      ...record,
+      industryRS: rs.industryRS,
+      sectorRS: rs.sectorRS
+    };
+  });
+
   // Stable-ish: keep higher SCTR first by default.
-  records.sort((a, b) => {
+  recordsWithRS.sort((a, b) => {
     const sa = typeof a.SCTR === "number" ? a.SCTR : -Infinity;
     const sb = typeof b.SCTR === "number" ? b.SCTR : -Infinity;
     if (sa === sb) return String(a.symbol).localeCompare(String(b.symbol));
     return sb - sa;
   });
 
-  return { records };
+  return { records: recordsWithRS, stats };
 }
 
 module.exports = {
