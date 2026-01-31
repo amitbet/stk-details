@@ -1,4 +1,5 @@
 const { fetchSctrJson } = require("./sctrService");
+const { calculateIndustryMA50 } = require("./maService");
 const Papa = require("papaparse");
 
 function detectDelimiter(csvText) {
@@ -225,24 +226,104 @@ async function fetchSctrForTickers(tickers) {
     .map((t) => String(t || "").trim().toUpperCase())
     .filter(Boolean);
 
-  if (normalized.length === 0) return { records: [], stats: { industries: {}, sectors: {} } };
+  if (normalized.length === 0) return { records: [], stats: { industries: {}, sectors: {} }, missingTickers: [] };
 
   // Fetch ALL records to calculate industry/sector statistics
   const all = await fetchSctrJson({});
   const wanted = new Set(normalized);
   const records = all.filter((r) => wanted.has(String(r.symbol || "").toUpperCase()));
+  
+  // Find missing tickers
+  const foundSymbols = new Set(records.map((r) => String(r.symbol || "").toUpperCase()));
+  const missingTickers = normalized.filter((t) => !foundSymbols.has(t));
+  
+  if (missingTickers.length > 0) {
+    console.log(`[API] Missing tickers (not found in SCTR database): ${missingTickers.join(", ")}`);
+  }
+  console.log(`[API] Requested ${normalized.length} tickers, found ${records.length} records`);
 
   // Calculate industry/sector statistics from all records
   const stats = calculateIndustrySectorStats(all);
 
-  // Add relative strength to each record
+  // Calculate 50-day MA position for industries in the results
+  const industryMA50 = {};
+  const industriesInResults = new Set();
+  for (const record of records) {
+    const industry = String(record.industry || "").trim();
+    if (industry && !industriesInResults.has(industry)) {
+      industriesInResults.add(industry);
+    }
+  }
+
+  // Calculate MA50 for each unique industry (caching and ETFs make this faster)
+  const industriesArray = Array.from(industriesInResults);
+  
+  // Helper to add timeout to promises
+  const withTimeout = (promise, timeoutMs = 30000) => {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), timeoutMs)
+      )
+    ]);
+  };
+
+  const ma50Promises = industriesArray.map(async (industry) => {
+    const industryRecords = all.filter((r) => String(r.industry || "").trim() === industry);
+    if (industryRecords.length === 0) return null;
+    
+    try {
+      const ma50Data = await withTimeout(
+        calculateIndustryMA50(industryRecords, all),
+        30000 // 30 second timeout per industry
+      );
+      return { industry, data: ma50Data };
+    } catch (error) {
+      console.error(`Error calculating MA50 for industry ${industry}:`, error.message || error);
+      return null;
+    }
+  });
+
+  // Wait for all MA50 calculations (with timeout per industry)
+  const ma50Results = await Promise.allSettled(ma50Promises);
+  for (const result of ma50Results) {
+    if (result.status === "fulfilled" && result.value && result.value.data) {
+      industryMA50[result.value.industry] = result.value.data;
+      console.log(`[API] Successfully got MA50 for industry: ${result.value.industry}`);
+    } else if (result.status === "rejected") {
+      console.error(`[API] MA50 promise rejected:`, result.reason);
+    } else if (result.status === "fulfilled" && result.value && !result.value.data) {
+      console.log(`[API] MA50 returned null for industry: ${result.value.industry}`);
+    }
+  }
+  
+  console.log(`[API] Total industries processed: ${industriesArray.length}, successful: ${Object.keys(industryMA50).length}`);
+
+  // Add relative strength and MA50 info to each record
   const recordsWithRS = records.map((record) => {
     const rs = calculateRelativeStrength(record, stats);
-    return {
+    const industry = String(record.industry || "").trim();
+    const industryMA50Data = industryMA50[industry] || null;
+
+    const enrichedRecord = {
       ...record,
       industryRS: rs.industryRS,
-      sectorRS: rs.sectorRS
+      sectorRS: rs.sectorRS,
+      industryAboveMA50: industryMA50Data?.aboveMA ?? null,
+      industryPercentAboveMA50: industryMA50Data?.percentAboveMA50 ?? null
     };
+
+    // Debug logging for first few records
+    if (records.indexOf(record) < 3) {
+      console.log(`[API] Record ${record.symbol} (${industry}):`, {
+        hasMA50Data: !!industryMA50Data,
+        aboveMA: enrichedRecord.industryAboveMA50,
+        percentAbove: enrichedRecord.industryPercentAboveMA50,
+        availableIndustries: Object.keys(industryMA50)
+      });
+    }
+
+    return enrichedRecord;
   });
 
   // Stable-ish: keep higher SCTR first by default.
@@ -253,7 +334,7 @@ async function fetchSctrForTickers(tickers) {
     return sb - sa;
   });
 
-  return { records: recordsWithRS, stats };
+  return { records: recordsWithRS, stats: { ...stats, industryMA50 }, missingTickers };
 }
 
 module.exports = {

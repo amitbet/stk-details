@@ -95,3 +95,5 @@ dist-electron/
 *.tmp
 *.temp
 .cache/
+
+samples/

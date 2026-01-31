@@ -16,6 +16,7 @@ const columns = [
   { key: "SCTR", label: "SCTR" },
   { key: "industryRS", label: "Ind RS" },
   { key: "sectorRS", label: "Sec RS" },
+  { key: "industryAboveMA50", label: "Ind vs MA50" },
   { key: "delta", label: "Δ" },
   { key: "close", label: "Close" },
   { key: "marketCap", label: "MktCap(M)" },
@@ -54,6 +55,21 @@ export default function ResultsTable({ records, loading }) {
     if (rs < -20) return { color: "var(--rs-weak)" };
     if (rs < -10) return { color: "var(--rs-poor)" };
     return {};
+  }
+
+  function formatMA50Status(aboveMA, percentAbove) {
+    if (aboveMA == null) return "—";
+    if (aboveMA) {
+      return `↑ ${percentAbove != null ? percentAbove.toFixed(1) : ""}%`;
+    } else {
+      return `↓ ${percentAbove != null ? Math.abs(percentAbove).toFixed(1) : ""}%`;
+    }
+  }
+
+  function getMA50Color(aboveMA) {
+    if (aboveMA == null) return {};
+    if (aboveMA) return { color: "var(--rs-good)" };
+    return { color: "var(--rs-poor)" };
   }
 
   return (
@@ -95,6 +111,9 @@ export default function ResultsTable({ records, loading }) {
                   </td>
                   <td style={{ ...styles.td, ...styles.num, ...getRSColor(r.sectorRS) }}>
                     {r.sectorRS != null ? `${r.sectorRS > 0 ? "+" : ""}${fmt(r.sectorRS, 1)}%` : "—"}
+                  </td>
+                  <td style={{ ...styles.td, ...styles.num, ...getMA50Color(r.industryAboveMA50) }}>
+                    {formatMA50Status(r.industryAboveMA50, r.industryPercentAboveMA50)}
                   </td>
                   <td style={{ ...styles.td, ...styles.num }}>{fmt(r.delta, 1)}</td>
                   <td style={{ ...styles.td, ...styles.num }}>{fmt(r.close, 2)}</td>

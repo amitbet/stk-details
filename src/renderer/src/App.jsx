@@ -28,6 +28,15 @@ function AppContent() {
     try {
       const data = await fetchSctr(unique);
       setRecords(Array.isArray(data.records) ? data.records : []);
+      
+      // Show warning if some tickers are missing
+      const missing = Array.isArray(data.missingTickers) ? data.missingTickers : [];
+      if (missing.length > 0) {
+        const missingMsg = `${missing.length} ticker(s) not found in SCTR database: ${missing.join(", ")}`;
+        console.warn(missingMsg);
+        // Set error to show warning (but don't clear records)
+        setError(`Warning: ${missingMsg}`);
+      }
     } catch (e) {
       setError(e?.message || String(e));
     } finally {
