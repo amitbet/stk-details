@@ -6,6 +6,8 @@ files:
   - "src/shared/**"
   - "package.json"
 asar: true
+asarUnpack:
+  - "dist/renderer/**"
 directories:
   buildResources: build
   output: dist-electron

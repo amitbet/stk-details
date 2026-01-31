@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { useTheme } from "../ThemeContext.jsx";
+import { parseCsvFromFile } from "../utils/api.js";
 
 export default function CSVUpload({ onTickers }) {
   const { isDark } = useTheme();
@@ -12,14 +13,7 @@ export default function CSVUpload({ onTickers }) {
       if (!file) return;
       setStatus(`Parsing ${file.name}...`);
       try {
-        const form = new FormData();
-        form.append("file", file);
-        const resp = await fetch("/api/parse-csv", { method: "POST", body: form });
-        if (!resp.ok) {
-          const text = await resp.text();
-          throw new Error(text || `HTTP ${resp.status}`);
-        }
-        const data = await resp.json();
+        const data = await parseCsvFromFile(file);
         const tickers = Array.isArray(data.tickers) ? data.tickers : [];
         setStatus(`Found ${tickers.length} tickers (column: ${data.tickerColumnName ?? data.tickerColumnIndex ?? "?"}).`);
         onTickers?.(tickers, { source: "CSV" });

@@ -5,6 +5,7 @@ import ManualInput from "./components/ManualInput.jsx";
 import ResultsTable from "./components/ResultsTable.jsx";
 import ExportButton from "./components/ExportButton.jsx";
 import DarkModeToggle from "./components/DarkModeToggle.jsx";
+import { fetchSctr } from "./utils/api.js";
 
 function AppContent() {
   const { isDark } = useTheme();
@@ -16,7 +17,7 @@ function AppContent() {
 
   const tickerCount = useMemo(() => tickers.length, [tickers]);
 
-  async function fetchSctr(nextTickers) {
+  async function fetchSctrData(nextTickers) {
     const unique = Array.from(new Set(nextTickers.map((t) => t.toUpperCase().trim()).filter(Boolean)));
     setTickers(unique);
     setError("");
@@ -25,16 +26,7 @@ function AppContent() {
 
     setLoading(true);
     try {
-      const resp = await fetch("/api/fetch-sctr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tickers: unique })
-      });
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(text || `HTTP ${resp.status}`);
-      }
-      const data = await resp.json();
+      const data = await fetchSctr(unique);
       setRecords(Array.isArray(data.records) ? data.records : []);
     } catch (e) {
       setError(e?.message || String(e));
@@ -48,7 +40,7 @@ function AppContent() {
       <DarkModeToggle />
       <div style={styles.header}>
         <div>
-          <div style={styles.title}>Stock details</div>
+          <div style={styles.title}>stock details</div>
           <div style={styles.subtitle}>Fetch SCTR for your ticker lists (CSV drag/drop or manual input).</div>
         </div>
         <div style={styles.headerRight}>
@@ -70,13 +62,13 @@ function AppContent() {
         <CSVUpload
           onTickers={(t, meta) => {
             setLastSource(meta?.source || "CSV");
-            fetchSctr(t);
+            fetchSctrData(t);
           }}
         />
         <ManualInput
           onTickers={(t) => {
             setLastSource("Manual");
-            fetchSctr(t);
+            fetchSctrData(t);
           }}
         />
       </div>
@@ -84,9 +76,12 @@ function AppContent() {
       {error ? <div style={styles.error}>{error}</div> : null}
       <ResultsTable records={records} loading={loading} />
 
-      <div style={styles.footer}>
-        Backend expected at <code style={styles.code}>http://localhost:3002</code> (proxy via Vite <code style={styles.code}>/api</code>).
-      </div>
+      {/* Only show footer in browser dev mode (Vite), not in Electron (dev or prod) */}
+      {typeof window !== "undefined" && !window.electronAPI && window.location.hostname === "localhost" ? (
+        <div style={styles.footer}>
+          Backend expected at <code style={styles.code}>http://localhost:3002</code> (proxy via Vite <code style={styles.code}>/api</code>).
+        </div>
+      ) : null}
     </div>
   );
 }
