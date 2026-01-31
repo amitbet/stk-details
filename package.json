@@ -14,7 +14,8 @@
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:mac:portable": "electron-builder --mac --dir",
-    "dist:win": "electron-builder --win",
+    "dist:win": "electron-builder --win --x64",
+    "dist:win:portable": "electron-builder --win portable --x64",
     "dist:all": "electron-builder --mac --win"
   },
   "dependencies": {

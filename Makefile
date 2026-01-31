@@ -1,4 +1,4 @@
-.PHONY: install dev dev-ui build package package-mac package-mac-portable package-win package-all clean
+.PHONY: install dev dev-ui build package package-mac package-mac-portable package-win package-win-portable package-all clean
 
 install:
 	npm install
@@ -22,6 +22,9 @@ package-mac-portable: build
 
 package-win: build
 	npm run dist:win
+
+package-win-portable: build
+	npm run dist:win:portable
 
 package-all: build
 	npm run dist:all
