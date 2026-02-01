@@ -48,7 +48,8 @@ function createApp({ rendererDir, enableCors } = {}) {
   app.post("/api/fetch-sctr", async (req, res) => {
     try {
       const tickers = Array.isArray(req.body?.tickers) ? req.body.tickers : [];
-      const result = await fetchSctrForTickers(tickers);
+      const industrySource = req.body?.industrySource || "finviz";
+      const result = await fetchSctrForTickers(tickers, industrySource);
       return res.json(result);
     } catch (e) {
       return res.status(500).send(e?.message || String(e));

@@ -81,9 +81,9 @@ ipcMain.handle("api:parse-csv", async (_event, csvText) => {
   }
 });
 
-ipcMain.handle("api:fetch-sctr", async (_event, tickers) => {
+ipcMain.handle("api:fetch-sctr", async (_event, tickers, industrySource) => {
   try {
-    const result = await fetchSctrForTickers(tickers);
+    const result = await fetchSctrForTickers(tickers, industrySource);
     return { success: true, data: result };
   } catch (error) {
     return { success: false, error: error?.message || String(error) };

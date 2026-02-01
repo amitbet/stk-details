@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { ThemeProvider, useTheme } from "./ThemeContext.jsx";
 import CSVUpload from "./components/CSVUpload.jsx";
 import ManualInput from "./components/ManualInput.jsx";
 import ResultsTable from "./components/ResultsTable.jsx";
 import ExportButton from "./components/ExportButton.jsx";
 import DarkModeToggle from "./components/DarkModeToggle.jsx";
+import IndustrySourceSelector from "./components/IndustrySourceSelector.jsx";
 import { fetchSctr } from "./utils/api.js";
 
 function AppContent() {
@@ -14,10 +15,34 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastSource, setLastSource] = useState("");
+  const [industrySource, setIndustrySource] = useState(() => {
+    // Load from localStorage or default to "finviz"
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("industrySource");
+      return saved || "finviz";
+    }
+    return "finviz";
+  });
+
+  // Save industry source preference to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("industrySource", industrySource);
+    }
+  }, [industrySource]);
+
+  // Auto-refresh data when industry source changes (if we have tickers)
+  useEffect(() => {
+    if (tickers.length > 0 && !loading) {
+      console.log(`[App] Industry source changed to ${industrySource}, refreshing data...`);
+      fetchSctrData(tickers);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [industrySource]); // Only trigger on industrySource change, fetchSctrData is stable
 
   const tickerCount = useMemo(() => tickers.length, [tickers]);
 
-  async function fetchSctrData(nextTickers) {
+  const fetchSctrData = React.useCallback(async (nextTickers) => {
     const unique = Array.from(new Set(nextTickers.map((t) => t.toUpperCase().trim()).filter(Boolean)));
     setTickers(unique);
     setError("");
@@ -26,7 +51,7 @@ function AppContent() {
 
     setLoading(true);
     try {
-      const data = await fetchSctr(unique);
+      const data = await fetchSctr(unique, industrySource);
       setRecords(Array.isArray(data.records) ? data.records : []);
       
       // Show warning if some tickers are missing
@@ -42,7 +67,7 @@ function AppContent() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [industrySource]); // Include industrySource in dependencies
 
   return (
     <div style={styles.page}>
@@ -67,19 +92,24 @@ function AppContent() {
         </div>
       </div>
 
-      <div style={styles.controls}>
-        <CSVUpload
-          onTickers={(t, meta) => {
-            setLastSource(meta?.source || "CSV");
-            fetchSctrData(t);
-          }}
-        />
-        <ManualInput
-          onTickers={(t) => {
-            setLastSource("Manual");
-            fetchSctrData(t);
-          }}
-        />
+      <div style={styles.controlsSection}>
+        <div style={styles.sourceSelector}>
+          <IndustrySourceSelector value={industrySource} onChange={setIndustrySource} />
+        </div>
+        <div style={styles.controls}>
+          <CSVUpload
+            onTickers={(t, meta) => {
+              setLastSource(meta?.source || "CSV");
+              fetchSctrData(t);
+            }}
+          />
+          <ManualInput
+            onTickers={(t) => {
+              setLastSource("Manual");
+              fetchSctrData(t);
+            }}
+          />
+        </div>
       </div>
 
       {error ? <div style={styles.error}>{error}</div> : null}
@@ -144,11 +174,20 @@ const styles = {
     color: "var(--text-secondary)",
     fontSize: 14
   },
+  controlsSection: {
+    marginBottom: 24
+  },
+  sourceSelector: {
+    marginBottom: 16,
+    padding: 12,
+    background: "var(--bg-secondary)",
+    borderRadius: 10,
+    border: "1px solid var(--border)"
+  },
   controls: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 20,
-    marginBottom: 24
+    gap: 20
   },
   meta: {
     fontSize: 13,

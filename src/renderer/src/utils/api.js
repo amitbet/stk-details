@@ -38,10 +38,10 @@ async function parseCsvFromFile(file) {
   return parseCsv(text);
 }
 
-async function fetchSctr(tickers) {
+async function fetchSctr(tickers, industrySource = "finviz") {
   // Use IPC if available (Electron), otherwise use HTTP fetch (browser dev)
   if (window.electronAPI?.fetchSctr) {
-    const result = await window.electronAPI.fetchSctr(tickers);
+    const result = await window.electronAPI.fetchSctr(tickers, industrySource);
     if (!result.success) {
       throw new Error(result.error || "Failed to fetch SCTR");
     }
@@ -51,7 +51,7 @@ async function fetchSctr(tickers) {
     const resp = await fetch("/api/fetch-sctr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tickers })
+      body: JSON.stringify({ tickers, industrySource })
     });
     if (!resp.ok) {
       const text = await resp.text();
